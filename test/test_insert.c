@@ -10,7 +10,7 @@ int main(int argc, char *argv[])
     ENTRY *en[TRIAL_NUM];
     ENTRY *result;
     
-    KEY key1[] = "academ";
+    KEY key1[] = "academe";
     KEY key2[] = "cache";
     KEY key3[] = "cable";
 
