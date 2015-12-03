@@ -7,7 +7,7 @@ A Minimum and Efficient library of Patricia Trie in implemented "C".
 - libbsd(Only for Linux).
 
 # Usage
-This library basically stores a pair of key and value to LEAF node.
+This library basically stores a pair of key and value to LEAF node.  
 Type of key is "char" and type of value is voluntary which specified macro named "DATA" in ptrie.h.  
 You can define to use ENTRY type which you want to store a pair of KEY and VALUE.  
 Additionally, you know what became of result of manipulate such as insert() or delete() to Patricia through ENTRY type.    
