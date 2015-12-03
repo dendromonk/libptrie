@@ -11,5 +11,5 @@ Additionally, you know what became of result of manipulate such as insert() or d
 ENTRY type consists three-entity such as "key" and "data" and "status".
 The last member of "status" means condition which result of manipulation such as insert() or search() and delete().
 
-See [test]:(./test).
+See [test](./test).
 
