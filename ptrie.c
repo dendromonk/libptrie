@@ -17,14 +17,14 @@ NODE* createLEAF(KEY *key, size_t start_point, DATA val) {
 
         leaf->type = LEAF;
 
-        len = strnlen(key + start_point, MAX_KEY_LEN);
+        len = strnlen(src, MAX_KEY_LEN);
         leaf->Key = malloc(sizeof(KEY)*(len + 1));
         if (leaf->Key == NULL) {
             perror("malloc()createLEAF()");
             return NULL;
         }
         else {
-            strlcpy(leaf->Key, key + start_point, len + 1);
+            strlcpy(leaf->Key, src, len + 1);
             
             leaf->Val = val;
 
@@ -117,7 +117,6 @@ unsigned int compareSHARE(KEY *share, unsigned char baseDigit, KEY *key)
 {
     unsigned  char digit;
     unsigned int num_letter, fullBit;
-    int status;
     size_t len, len1, len2;
 
     len1 = strnlen(share, MAX_KEY_LEN) - 1;
@@ -144,7 +143,6 @@ unsigned int compareLEAF(KEY *key1, KEY *key2)
 {
     unsigned  char digit;
     unsigned int num_letter, fullBit;
-    int status;
     size_t len, len1, len2;
 
     len1 = strnlen(key1, MAX_KEY_LEN);
@@ -526,14 +524,12 @@ int restruct(NODE **pnode, NODE *node, NODE *rest) {
 
 int delete(NODE **pnode, NODE *node, KEY *key) {
     
-    KEY *target, *newKey;
-    KEY **refKEY;
+    KEY *target;
     unsigned int fullBit, num_letter;
     unsigned char digit;
-    size_t len, lenShare, lenKey;
+    size_t len;
     NODE *next, *rest;
     NODE **parent;
-    ENTRY *result;
     bool point;
     int status;
 
