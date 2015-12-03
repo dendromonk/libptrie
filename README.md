@@ -1,7 +1,9 @@
 # libptrie - A Minimum and Efficient library of Patricia in implemented "C"
 
 # Requirements
-This library needs only Standard library for C99 and libbsd for Linux.
+- C99 Compiler(``cc`` or ``gcc`` or ``clang``)
+- The archiver command "ar" which is including Unix utility 
+- libbsd(Only for Linux).
 
 # Usage
 Basically, this library stores a pair of key and value to LEAF node.
@@ -12,4 +14,15 @@ ENTRY type consists three-entity such as "key" and "data" and "status".
 The last member of "status" means condition which result of manipulation such as insert() or search() and delete().  
 
 If you try to use for practical purpose, See [test](./test).
+
+# Build
+```
+make ptrie
+cd ./test
+cc -o test_insert test_insert.c -L ../ -lptrie
+```
+
+# LICENSE
+See [License](./LICENSE).
+
 
