@@ -2,7 +2,7 @@
 A Minimum and Efficient library of Patricia Trie in implemented "C".
 
 # Requirements
-- C99 Compiler(``cc`` or ``gcc`` or ``clang``)
+- C99 Compiler(``gcc`` or ``clang``)
 - The archiver command "ar" which is including Unix utility 
 - libbsd(Only for Linux).
 
