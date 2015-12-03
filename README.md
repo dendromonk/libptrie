@@ -1,5 +1,5 @@
 # libptrie
-A Minimum and Efficient Patricia library in implemented "C".
+A Minimum and Efficient library of Patricia Trie in implemented "C".
 
 # Requirements
 - C99 Compiler(``cc`` or ``gcc`` or ``clang``)
