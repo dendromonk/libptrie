@@ -544,6 +544,7 @@ int delete(NODE **pnode, NODE *node, KEY *key) {
             if (digit == 0 && (len - num_letter) == 0) {
                 free(target);
                 free(node);
+
                 return MATCHED;
             }
             else if (digit > 0 && (len - num_letter) > 0) {
