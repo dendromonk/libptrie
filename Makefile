@@ -1,6 +1,6 @@
 CC = cc
 AR = ar
-CFLAGS = -Os -Wall
+CFLAGS = -O0 -g -ggdb
 ARFLAGS = rcsv
 
 OBJS = ptrie.o
