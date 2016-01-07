@@ -2,11 +2,11 @@
 
 NODE *root = NULL;
 
-NODE* createLEAF(KEY *key, size_t start_point, DATA val) {
+NODE* createLEAF(KEY *key, size_t start_point, DIGIT digit, DATA val) {
 
     NODE *leaf;
     size_t len;
-    const char *src = key + start_point;
+    const KEY *src = key + start_point;
 
     leaf = malloc(sizeof(NODE));
     if (leaf == NULL) {
@@ -24,8 +24,10 @@ NODE* createLEAF(KEY *key, size_t start_point, DATA val) {
             return NULL;
         }
         else {
-            strlcpy(leaf->Key, src, len + 1);
-            
+            memcpy(leaf->Key, src, len);
+            *(leaf->Key + len) = '\0';
+            //strlcpy(leaf->Key, src, len + 1);
+            leaf->LDigit = (DIGIT)digit; 
             leaf->Val = val;
 
             return leaf;
@@ -44,13 +46,15 @@ int reSizeKEY(NODE *node, size_t start_point, unsigned char node_type) {
     target = REF_KEY(node);
 
     oldLen = strnlen(*target, MAX_KEY_LEN);
-    oldKey = malloc(sizeof(NODE) * (oldLen + 1));
+    oldKey = malloc(sizeof(KEY) * (oldLen + 1));
     if (oldKey == NULL) {
         perror("malloc@reSizeKEY()");
         return ERROR;
     }
     else {
-        strlcpy(oldKey, *target, oldLen + 1);
+        memcpy(oldKey, *target, oldLen);
+        *(oldKey + oldLen) = '\0';
+        //strlcpy(oldKey, *target, oldLen + 1);
 
         newLen = strnlen(*target + start_point, MAX_KEY_LEN);
         tmp = realloc(*target, sizeof(KEY) * (newLen + 1));
@@ -60,7 +64,8 @@ int reSizeKEY(NODE *node, size_t start_point, unsigned char node_type) {
         }
         else {
             *target = tmp;
-            strlcpy(*target, oldKey + start_point, newLen + 1);
+            memcpy(*target, oldKey + start_point, newLen);
+            *(*target + newLen) = '\0';
 
             free(oldKey);
             return SUCCESS;
@@ -72,7 +77,6 @@ unsigned int compare_letter(KEY *key1, KEY *key2, size_t len)
 {
     unsigned int i;
 
-    i = 0;
     for (i = 0; i < len; i++) {
         if ( *(key1 + i) != *(key2 + i) ) {
             break;
@@ -85,13 +89,12 @@ unsigned int compare_letter(KEY *key1, KEY *key2, size_t len)
     return i;
 }
 
-unsigned char compare_bit(KEY *key1, KEY *key2, int thresh)
+unsigned char compare_bit(KEY *key1, DIGIT bottom, KEY *key2, DIGIT top)
 {
     KEY bitKey1, bitKey2, mask;
-    int i;
-    unsigned char digit;
+    int i, point;
 
-    for (i = (MSD - 1); i >= (thresh - 1); i--) {
+    for (i = TOP(top); i >= BOTTOM(bottom); i--) {
         mask = 1 << i;
         bitKey1 = (*key1) & mask;
         bitKey2 = (*key2) & mask;
@@ -99,72 +102,163 @@ unsigned char compare_bit(KEY *key1, KEY *key2, int thresh)
             break;
         }
         else {
+            if (point > BOTTOM(bottom)) {
+                point--;
+            }
             continue;
         }
     }
-
-    if (i < 0) {
-        digit = 0;
-    }
-    else {
-        digit = (unsigned char)++i;
-    }
-
-    return digit;
-}
-
-unsigned int compareSHARE(KEY *share, unsigned char baseDigit, KEY *key)
-{
-    unsigned  char digit;
-    unsigned int num_letter, fullBit;
-    size_t len, len1, len2;
-
-    len1 = strnlen(share, MAX_KEY_LEN) - 1;
-    len2 = strnlen(key, MAX_KEY_LEN);
-    if (len1 < len2) {
-        len = len1;
-    }
-    else {
-        len = len2;
-    }
-
-    num_letter = compare_letter(share, key, len);
     
-    digit = compare_bit(share + num_letter, key + num_letter, baseDigit);
+    return (unsigned char)(++point);
+}
 
-    fullBit = (unsigned int)digit + (BIT_UNIT * num_letter);
+unsigned int compareSHARE(KEY *share, DIGIT shareDigit, ENTRY *en)
+{
+    KEY *key = en->key + en->num_letter;
+    unsigned char keyDigit = en->digit;
+    unsigned  char digit;
+    unsigned int num_letter, fullBit;
+    size_t len, lenShare, lenKey;
 
+    lenShare = strnlen(share, MAX_KEY_LEN);
+    lenKey = strnlen(key, MAX_KEY_LEN);
+    if (lenShare < lenKey) {
+        len = lenShare;
+    }
+    else {
+        len = lenKey;
+    }
+
+    num_letter = 0;
+    if (lenShare == 1) {
+        digit = compare_bit(share, shareDigit, key, keyDigit);
+    }
+    else {
+        switch(en->digit) {
+            case WHOLE:
+                num_letter = compare_letter(share, key, len);
+                if ( (num_letter + 1) == lenShare && shareDigit != WHOLE ) {
+                    digit = compare_bit(share + num_letter, shareDigit,
+                                        key + num_letter,   MSD);
+                    break;
+                }
+                else if (num_letter == len && shareDigit != WHOLE) {
+                    num_letter--;
+                    digit = compare_bit(share + num_letter, shareDigit,
+                                        key + num_letter,   MSD);
+                    break;
+                }
+                else if (num_letter < len) {
+                    digit = compare_bit(share + num_letter, WHOLE,
+                                        key + num_letter, MSD);
+                    break;
+                }
+                else { /* if (num_letter == len && shareDigit == WHOLE &&
+                              digit == WHOLE ) {
+                        *
+                        * all letter matched and shareDigit == WHOLE and 
+                        * digit == WHOLE 
+                        */
+                    digit = WHOLE;
+                    break;
+                }
+            default:
+                digit = compare_bit(share, WHOLE, key, keyDigit);
+                if (digit == WHOLE) {
+                    num_letter = compare_letter(share + 1, key + 1, len - 1);
+                    num_letter++;
+                    if ( (num_letter + 1) == lenShare ) {
+                        digit = compare_bit(share + num_letter, shareDigit,
+                                            key + num_letter, MSD);
+                        break;
+                    }
+                    else if ( (num_letter + 1) < lenShare ) {
+                        digit = compare_bit(share + num_letter, WHOLE,
+                                            key + num_letter, MSD);
+                        break;
+                    }
+                    else if (num_letter == lenShare && shareDigit != WHOLE) {
+                        num_letter--;
+                        digit = compare_bit(share + num_letter, shareDigit,
+                                            key + num_letter, MSD);
+                        break;
+                    }
+                    else {
+                        /* all strings and bits matched. */
+                        digit = WHOLE;
+                        break;
+                    }
+                }
+                else {
+                    /* new collision occurred. */
+                    break;
+                }
+        }
+    }
+    
+    fullBit = (unsigned int)digit + ((BIT_UNIT + 1) * num_letter);
+       
     return fullBit;
 }
 
 
-
-unsigned int compareLEAF(KEY *key1, KEY *key2)
+int compareLEAF(KEY *leafKey, DIGIT top, ENTRY *en)
 {
+    KEY *key = en->key + en->num_letter;
+    unsigned char keyDigit = en->digit;
     unsigned  char digit;
-    unsigned int num_letter, fullBit;
-    size_t len, len1, len2;
+    int num_letter, fullBit;
+    size_t len, lenLeaf, lenKey;
 
-    len1 = strnlen(key1, MAX_KEY_LEN);
-    len2 = strnlen(key2, MAX_KEY_LEN);
-    if (len1 < len2) {
-        len = len1;
+    if (top != keyDigit) {
+        printf("compare consistency error.@compareLEAF():top:%#3x keyDigit:%#3x\n", top, keyDigit);
+        return ERROR;
     }
     else {
-        len = len2;
-    }
+        num_letter = 0;
 
-    num_letter = compare_letter(key1, key2, len);
-    if (num_letter < len) {
-        digit = compare_bit(key1 + num_letter, key2 + num_letter, LSD);
-    }
-    else {
-        digit = 0;
-    }
+        lenLeaf = strnlen(leafKey, MAX_KEY_LEN);
+        lenKey = strnlen(key, MAX_KEY_LEN);
+        if (lenLeaf < lenKey) {
+            len = lenLeaf;
+        }
+        else {
+            len = lenKey;
+        }
 
-    fullBit = (unsigned int)digit + (BIT_UNIT * num_letter);
+        if (top == WHOLE) {
+            num_letter = compare_letter(leafKey, key, len);
+            if (num_letter < len) {
+                digit = compare_bit(leafKey + num_letter, WHOLE,
+                                    key + num_letter, MSD);
+            }
+            else {
+                digit = WHOLE;
+            }
+        }
+        else {
+            digit = compare_bit(leafKey, WHOLE, key, top);
+            if (digit == WHOLE) {
+                num_letter =  compare_letter(leafKey + 1, key + 1, len - 1);
+                num_letter++;
+                if (num_letter < len) {
+                    digit = compare_bit(leafKey + num_letter, WHOLE,
+                                        key + num_letter, MSD);
+                }
+                else {
+                    digit = WHOLE;
+                    /* all strings and bits matched. */
+                }
+            }
+            else {
+                /* First String or bits unmatched. */
+            }
+        }
 
-    return fullBit;
+        fullBit = digit + ((BIT_UNIT + 1) * num_letter);
+
+        return fullBit;
+    }
 }
 
 
@@ -174,7 +268,7 @@ int Initiate(ENTRY *en) {
     size_t len;
 
     len = strnlen(en->key, MAX_KEY_LEN);
-    first = createLEAF(en->key, 0, en->val);
+    first = createLEAF(en->key, 0, WHOLE,  en->val);
     if (first == NULL) {
         return ERROR;
     }
@@ -210,14 +304,17 @@ KEY* createSHARE(KEY *key, int num_letter) {
         share = NULL;
     }
     else {
-        strlcpy(share, key, num_letter + 1); 
+        memcpy(share, key, num_letter);
+        *(share + num_letter) = '\0';
+        //strlcpy(share, key, num_letter + 1); 
+        printf("  share:%s@createSHARE\n", share);
         return share;
     }
 
     return NULL;
 }
 
-NODE* createINTERNAL(KEY *left, unsigned int num_letter, unsigned char digit) {
+NODE* createINTERNAL(KEY *left, unsigned int start_point, DIGIT digit) {
 
     NODE *new;
     
@@ -228,8 +325,8 @@ NODE* createINTERNAL(KEY *left, unsigned int num_letter, unsigned char digit) {
     }
     else {
         new->type = INTERNAL;
-        new->Digit = (unsigned char)(digit + 1);
-        new->Share = createSHARE(left, num_letter + 1);
+        new->SDigit = (unsigned char)digit;
+        new->Share = createSHARE(left, start_point);
 
         new->Left = NULL;
         new->Right = NULL;
@@ -238,42 +335,70 @@ NODE* createINTERNAL(KEY *left, unsigned int num_letter, unsigned char digit) {
     }
 }
 
-int createFork(NODE **pnode, NODE *node, KEY *key, DATA val) {
+int createFork(NODE **pnode, NODE *node, ENTRY *en) {
     NODE *new, *next;
     NODE **parent;
     KEY **target;
-    unsigned int  num_letter, fullBit;
-    unsigned char digit;
+    KEY *key = en->key + en->num_letter;
+    int  fullBit;
+    unsigned char digit, leafDigit;
     int status;
     bool point;
-    size_t len, tail_point;
+    size_t lenKey, lenTarget, lenShare, num_letter;
     
     target = REF_KEY(node);
-    len = strnlen(key, MAX_KEY_LEN);
+    lenTarget = strnlen(*target, MAX_KEY_LEN);
+
+    lenKey = strnlen(key, MAX_KEY_LEN);
 
     switch(node->type) {
         case LEAF: 
-            fullBit = compareLEAF(*target, key);
-            num_letter = fullBit / BIT_UNIT;
-            digit = (unsigned char)fullBit % BIT_UNIT;
-            if (digit == 0 && (len - num_letter) == 0) {
-                status =  MATCHED;
-                break;
-            }
-            else if (digit > 0 && (len - num_letter) > 0) {
-                status =  UNMATCHED;
-                break;
+            fullBit = compareLEAF(*target, node->LDigit, en);
+            if (fullBit == ERROR) {
+                return ERROR;
             }
             else {
-                status = ERROR;
-                break;
+                num_letter = fullBit / (BIT_UNIT + 1);
+                digit = (unsigned char)(fullBit % (BIT_UNIT + 1));
+                if ( digit == 0 ) { //&& (lenKey - num_letter) == 0 ) {
+                    status = MATCHED;
+                    break;
+                }
+                else if ( digit > 0 ) { //|| (lenKey - num_letter) > 0 ) {
+                    status = UNMATCHED;
+                    break;
+                }
+                
+                else {
+                    status = ERROR;
+                    printf("ERROR@ptrie_insert():%s\n", *target);
+                    break;
+                }
             }
-        case INTERNAL:
-            fullBit = compareSHARE(*target, node->Digit, key);
-            num_letter = fullBit / BIT_UNIT;
-            digit = (unsigned char)fullBit % BIT_UNIT;
-            if ( (digit + 1) == node->Digit && (len - num_letter) > 0 ) {
-                point = pullout_bit(key + num_letter, digit);
+        case  INTERNAL:
+            fullBit = compareSHARE(*target, node->SDigit, en);
+            num_letter = fullBit / (BIT_UNIT + 1);
+            digit = (unsigned char)(fullBit % (BIT_UNIT +  1));
+            if ( digit == node->SDigit && (lenTarget - 1) == num_letter && 
+                 (lenKey - num_letter) > 0 ) {
+                if (digit > 0) {
+                    point = pullout_bit(key + num_letter, digit);
+                    if ( digit == LSD ) {
+                        num_letter++;
+                        digit = WHOLE;
+                    }
+                    else {
+                        digit--;
+                        /* digit basically smaller at -1 which is
+                         * consistence. */
+                    }
+                }
+                else { /* else if (digit == WHOLE) { */
+                    num_letter++;
+                    point = pullout_bit(key + num_letter, MSD);
+                    digit = MSD - 1;
+                }
+
                 switch(point) {
                     case LEFT:
                         next = node->Left;
@@ -284,24 +409,45 @@ int createFork(NODE **pnode, NODE *node, KEY *key, DATA val) {
                         parent = &(node->Right);
                         break;
                 }
-            
-                key += num_letter;
-                status = createFork(parent, next, key, val);
+
+                en->num_letter += num_letter;
+                en->digit = digit;
+                status = createFork(parent, next, en);
 
                 return status;
-
             }
-            else if (digit >= node->Digit && (len - num_letter) > 0) {
+            else if ( digit == node->SDigit && (lenTarget - 1) == num_letter &&
+                      (lenKey - num_letter) == 0 ) {
+                status = MATCHED;
+                break;
+            }
+            else if ( digit != node->SDigit && (lenTarget - 1) == num_letter &&
+                      (lenKey - num_letter) > 0 ) {
                 /* createINTERNAL */
                 status = UNMATCHED;
                 break;
             }
+            else if ( (lenTarget - 1) > num_letter &&
+                      (lenKey - num_letter) > 0 ) {
+                status = UNMATCHED;
+                break;
+            }
+            /*
+            else if ( (num_letter < lenTarget) && (lenKey - num_letter) > 0 ) {
+                * createINTERNAL *
+                status = UNMATCHED;
+                break;
+            }
+            */
             else {
+                printf("Internal Unknown Error\ndigit:%#3x len - num_letter:%lu num_letter:%lu en->digit:%#3x\n", digit, lenKey - num_letter, num_letter, en->digit);
+                printf("Internal->Share:%s Internal->SDigit:%#x en->key:%s en->digit:%#3x\n", node->Share, node->SDigit, en->key, en->digit);
+                printf("fullBit:%u\n", fullBit);
                 status = ERROR;
                 break;
             }
         default:
-            return FAILURE;
+            return ERROR;
     }
 
     
@@ -309,12 +455,22 @@ int createFork(NODE **pnode, NODE *node, KEY *key, DATA val) {
         return MATCHED;
    }
    else if (status == UNMATCHED) {
-       new = createINTERNAL(*target, num_letter, digit);
-       len = strnlen(new->Share, MAX_KEY_LEN);
-       tail_point = len - 1;
-       point = pullout_bit(key + tail_point, digit);
 
-       status = reSizeKEY(node, tail_point, node->type);
+       lenShare = num_letter + 1;
+
+       new = createINTERNAL(*target, lenShare, digit);
+
+       point = pullout_bit(key + num_letter, digit);
+
+       if ( digit == LSD ) {
+           leafDigit = WHOLE;
+           num_letter++;
+       }
+       else {
+           leafDigit = digit - 1;
+       }
+
+       status = reSizeKEY(node, num_letter, node->type);
        if (status == ERROR) {
             perror("reSizeKEY@createFork()");
             return ERROR;
@@ -322,13 +478,19 @@ int createFork(NODE **pnode, NODE *node, KEY *key, DATA val) {
         else {
             switch(point) {
                 case LEFT:
-                    new->Left = createLEAF(key, tail_point, val);
+                    new->Left = createLEAF(key, num_letter, 
+                                           leafDigit, en->val);
                     new->Right = node;
                     break;
                 case RIGHT:
-                    new->Right = createLEAF(key, tail_point, val);
+                    new->Right = createLEAF(key, num_letter,
+                                            leafDigit, en->val);
                     new->Left = node;
                     break;
+            }
+
+            if (node->type == LEAF) {
+                node->LDigit = leafDigit;
             }
 
             *pnode = new;
@@ -337,13 +499,14 @@ int createFork(NODE **pnode, NODE *node, KEY *key, DATA val) {
         }
    }
    else {
+       printf("Unknown Error\n");
        return ERROR;
    }
 
 }
 
 
-ENTRY* createENTRY(KEY *key, DATA val, int status) {
+ENTRY* createENTRY(KEY *key, DIGIT digit, DATA val, int status) {
     
     ENTRY *en;
     size_t len;
@@ -361,8 +524,12 @@ ENTRY* createENTRY(KEY *key, DATA val, int status) {
             return NULL;
         }
         else {
-            strlcpy(en->key, key, MAX_KEY_LEN);
+            memcpy(en->key, key, len);
+            *(en->key + len) = '\0';
+            //strlcpy(en->key, key, len + 1);
+            en->num_letter = 0;
             en->val = val;
+            en->digit = (unsigned char)digit;
             en->status = status;
 
             return en;
@@ -373,43 +540,73 @@ ENTRY* createENTRY(KEY *key, DATA val, int status) {
 }
 
 
-ENTRY* search(NODE *node, KEY *key) {
+ENTRY* ptrie_search(NODE *node, ENTRY *en) {
     
-    KEY *target;
-    unsigned int fullBit, num_letter;
+    KEY *target, *key;
+    int fullBit;
     unsigned char digit;
-    size_t len;
+    size_t lenKey, lenTarget, num_letter;
     NODE *next;
     ENTRY *result;
     bool point;
     int status;
-
-    target = KEYCHAR(node);
-    len = strnlen(key, MAX_KEY_LEN);
     
+    if (node == NULL) {
+        return NULL;
+    }
+    else {
+    key = en->key + en->num_letter;
+    target = KEYCHAR(node);
+    lenTarget = strnlen(target, MAX_KEY_LEN);
+
+    lenKey = strnlen(key, MAX_KEY_LEN);
+
+    num_letter = 0;
     switch(node->type) {
         case LEAF: 
-            fullBit = compareLEAF(target, key);
-            num_letter = fullBit / BIT_UNIT;
-            digit = (unsigned char)fullBit % BIT_UNIT;
-            if (digit == 0 && (len - num_letter) == 0) {
-                status = MATCHED;
-                break;
-            }
-            else if (digit > 0 && (len - num_letter) > 0) {
-                status = UNMATCHED;
-                break;
+            fullBit = compareLEAF(target, node->LDigit, en);
+            if (fullBit == ERROR) {
+                return NULL;
             }
             else {
-                status = ERROR;
-                break;
+                num_letter = fullBit / (BIT_UNIT + 1);
+                digit = (unsigned char)(fullBit % (BIT_UNIT + 1));
+                if ( digit == 0) {// && (lenKey - num_letter) == 0 ) {
+                    status = MATCHED;
+                    break;
+                }
+                else if ( digit > 0) { // || (lenKey - num_letter) > 0 ) {
+                    status = UNMATCHED;
+                    break;
+                }
+                else {
+                    status = ERROR;
+                    printf("ERROR@ptrie_search():%s\n", target);
+                    break;
+                }
             }
         case INTERNAL:
-            fullBit = compareSHARE(target, node->Digit, key);
-            num_letter = fullBit / BIT_UNIT;
-            digit = (unsigned char)fullBit % BIT_UNIT;
-            if ( (digit + 1) == node->Digit && (len - num_letter) > 0 ) {
-                point = pullout_bit(key + num_letter, digit);
+            fullBit = compareSHARE(target, node->SDigit, en);
+            num_letter = fullBit / (BIT_UNIT + 1);
+            digit = (unsigned char)(fullBit % (BIT_UNIT + 1));
+            if ( digit == node->SDigit && (lenTarget - 1) == num_letter &&
+                 (lenKey - num_letter) > 0 ) {
+                if (digit > 0) {
+                    point = pullout_bit(key + num_letter, digit);
+                    if ( digit == LSD ) {
+                        num_letter++;
+                        digit = WHOLE;
+                    }
+                    else {
+                        digit--;
+                    }
+                }
+                else { // if (digit == WHOLE) {
+                    num_letter++;
+                    point = pullout_bit(key + num_letter, MSD);
+                    digit = MSD - 1;
+                }
+
                 switch(point) {
                     case LEFT:
                         next = node->Left;
@@ -419,80 +616,129 @@ ENTRY* search(NODE *node, KEY *key) {
                         break;
                 }
             
-                key += num_letter;
-                result = search(next, key);
+                en->num_letter += num_letter;
+                en->digit = digit;
+                result = ptrie_search(next, en);
 
                 return result;
 
             }
-            else if (digit >= node->Digit && (len - num_letter) > 0) {
+            else if ( digit == node->SDigit && (lenTarget - 1) == num_letter &&
+                      (lenKey - num_letter) == 0 ) {
+                status = MATCHED;
+                break;
+            }
+            else if ( digit != node->SDigit && (lenTarget - 1) == num_letter &&
+                      (lenKey - num_letter) > 0 ) {
+                /* createINTERNAL */
+                status = UNMATCHED;
+                break;
+            }
+            else if ( num_letter < lenTarget &&
+                      (lenKey - num_letter) > 0 ) {
                 /* createINTERNAL */
                 status = UNMATCHED;
                 break;
             }
             else {
                 status = ERROR;
+                printf("Internal Unknown Error@ptrie_search()\n");
                 break;
             }
         default:
-            return NULL;
+            status = ERROR;
+            break;
     }
 
-    if (status == MATCHED) {
-        result = createENTRY(node->Key, node->Val, MATCHED);
-        return result;
-    }
-    else if (status == UNMATCHED) {
+    if (status != ERROR) {
         switch(node->type) {
             case LEAF:
-                result = createENTRY(node->Key, node->Val, UNMATCHED);
-                return result;
+                result = createENTRY(node->Key, node->LDigit, node->Val, status);
+                break;
             case INTERNAL:
-                result = createENTRY(node->Share, node->Digit, UNMATCHED);
-                return result;
+                result = createENTRY(node->Share, node->SDigit, 0, status);
+                break;
         }
+
+        return result;
     }
     else {
         return NULL;
+    }
     }
 
 
     return NULL;
 }
 
-int restruct(NODE **pnode, NODE *node, NODE *rest) {
+int restoreShare(KEY  *restKey,   NODE *node,
+                 NODE *rest,      bool collBit)
+{
+    size_t end_point, lenShare;
+
+    lenShare = strnlen(node->Share, MAX_KEY_LEN);
+
+    end_point = lenShare - 1;
+
+    memcpy(restKey, node->Share, lenShare);
+    *(restKey + lenShare) = '\0';
+
+    *(restKey + end_point) &= MASK(node->SDigit);
+    /* Restore a part of Collision bit. */
+    switch(collBit) {
+        case 0:
+            *(restKey + end_point) |= (1 << (node->SDigit - 1));
+            break;
+        case 1:
+            *(restKey + end_point) &= PINBIT(node->SDigit);
+            break;
+        default:
+            return ERROR;
+    }
+
+    return SUCCESS;
+}
+
+int ptrie_merge(NODE **pnode, DIGIT pSDigit,
+                NODE *node,   NODE *rest,    KEY *restPart)
+{
     KEY *newKey, *target;
     KEY **refShare;
     NODE **refRight, **refLeft;
     NODE *leaf;
-    size_t lenKey, lenShare;
+    DIGIT leafDigit;
+    size_t lenTarget, lenNew, overlap;
 
     target = KEYCHAR(rest);
-    lenKey = strnlen(target, MAX_KEY_LEN); 
-    lenShare = strnlen(node->Share, MAX_KEY_LEN);
-    if (node->Digit > 0) {
-        lenShare--;
-        newKey = createSHARE(node->Share, lenShare + lenKey);
-        if (newKey == NULL) {
-            return ERROR;
-        }
-        else {
-            memcpy(newKey + lenShare, target, lenKey + 1);
-        }
+    lenTarget = strnlen(target, MAX_KEY_LEN); 
+    if (node->SDigit == LSD) {
+        overlap = 0;
+    }
+    else { /* if (node->SDigit > LSD) { */
+        overlap = 1;
+    }
+
+    lenNew = lenTarget + lenTarget - overlap;
+    newKey = malloc(sizeof(KEY) * (lenNew + 1));
+    if (newKey == NULL) {
+        return ERROR;
     }
     else {
-        newKey = createSHARE(node->Share, lenShare + lenKey);
-        if (newKey == NULL) {
-            return ERROR;
-        }
-        else {
-            strncat(newKey, target, lenKey);
-        }
+        memcpy(newKey, restPart, lenTarget);
+        memcpy(newKey + lenTarget - overlap, target, lenTarget);
+        *(newKey + lenNew) = '\0';
     }
     
     switch(rest->type) {
         case LEAF:
-            leaf = createLEAF(newKey, 0, rest->Val);
+            if ( *pnode == root) {
+                leafDigit = WHOLE;
+            }
+            else {
+                leafDigit = pSDigit - 1;
+            }
+
+            leaf = createLEAF(newKey, 0, leafDigit, rest->Val);
             if (leaf == NULL) {
                 return ERROR;
             }
@@ -504,6 +750,7 @@ int restruct(NODE **pnode, NODE *node, NODE *rest) {
                 return DELETED;
             }
         case INTERNAL:
+            free(node->Share);
             refShare = &(node->Share);
             refRight = &(node->Right);
             refLeft = &(node->Left);
@@ -511,6 +758,8 @@ int restruct(NODE **pnode, NODE *node, NODE *rest) {
             *refShare = newKey;
             *refRight = rest->Right;
             *refLeft = rest->Left;
+
+            node->SDigit = rest->SDigit;
 
             free(rest->Share);
             free(rest);
@@ -522,44 +771,85 @@ int restruct(NODE **pnode, NODE *node, NODE *rest) {
 
 }
 
-int delete(NODE **pnode, NODE *node, KEY *key) {
-    
-    KEY *target;
+int ptrie_restruct(NODE **pnode, DIGIT pSDigit, NODE *node,
+                   ENTRY *en,    KEY *restKey)
+{
+    KEY *target, *key, *restPart;
     unsigned int fullBit, num_letter;
     unsigned char digit;
-    size_t len;
+    size_t lenKey, lenTarget;
     NODE *next, *rest;
     NODE **parent;
     bool point;
     int status;
 
-    len = strnlen(key, MAX_KEY_LEN);
+    key = en->key + en->num_letter;
+    lenKey = strnlen(key, MAX_KEY_LEN);
     
+    target = KEYCHAR(node);
+    lenTarget = strnlen(target, MAX_KEY_LEN); 
+    num_letter = 0;
+
     switch(node->type) {
         case LEAF: 
-            target = node->Key;
-            fullBit = compareLEAF(target, key);
-            num_letter = fullBit / BIT_UNIT;
-            digit = (unsigned char)fullBit % BIT_UNIT;
-            if (digit == 0 && (len - num_letter) == 0) {
-                free(target);
-                free(node);
-
-                return MATCHED;
-            }
-            else if (digit > 0 && (len - num_letter) > 0) {
-                return UNMATCHED;
+            fullBit = compareLEAF(target, node->LDigit, en);
+            if (fullBit == ERROR) {
+                return FAILURE;
             }
             else {
-                return ERROR;
+                num_letter = fullBit / (BIT_UNIT + 1);
+                digit = (unsigned char)(fullBit % (BIT_UNIT + 1));
+                if ( digit == 0 && (lenKey - num_letter) == 0 ) {
+                    free(target);
+                    free(node);
+                    printf("done to free()@ptrie_restruct()\n");
+
+                    return MATCHED;
+                }
+                else if ( digit > 0 || (lenKey - num_letter) > 0 ) {
+                    return UNMATCHED;
+                }
+                else {
+                    printf("ERROR@ptrie_restruct():%s\n", target);
+                    return ERROR;
+                }
             }
         case INTERNAL:
-            target = KEYCHAR(node);
-            fullBit = compareSHARE(target, node->Digit, key);
-            num_letter = fullBit / BIT_UNIT;
-            digit = (unsigned char)fullBit % BIT_UNIT;
-            if ( (digit + 1) == node->Digit && (len - num_letter) > 0 ) {
-                point = pullout_bit(key + num_letter, digit);
+            fullBit = compareSHARE(target, node->SDigit, en);
+            num_letter = fullBit / (BIT_UNIT + 1);
+            digit = (unsigned char)(fullBit % (BIT_UNIT + 1));
+ 
+            if ( digit == node->SDigit && (lenTarget - 1) == num_letter &&
+                 (lenKey - num_letter) > 0 ) {
+                if (digit > 0) {
+                    point = pullout_bit(key + num_letter, digit);
+                    if (digit == LSD) {
+                        num_letter++;
+                        digit = WHOLE;
+                    }
+                    else {
+                        digit--;
+                    }
+                }
+                else { /* if (digit == 0) { */
+                    num_letter++;
+                    point = pullout_bit(key + num_letter, MSD);
+                    digit = MSD - 1;
+                }
+#ifdef DEBUG
+                printf("point:%#3x@ptrie_restruct()\n", point);
+#endif
+                status = restoreShare(restKey, node,
+                                      rest,    point);
+                if (status == ERROR) {
+                    perror("restoreShare()@ptrie_restruct()\n");
+                    return FAILURE;
+                }
+#ifdef DEBUG
+                printf("restKey:%s restKey + en->num_letter:%s lenShare:%lu@ptrie_restruct()\n", restKey, restKey + en->num_letter, lenTarget);
+#endif
+
+
                 switch(point) {
                     case LEFT:
                         next = node->Left;
@@ -573,31 +863,83 @@ int delete(NODE **pnode, NODE *node, KEY *key) {
                         break;
                 }
             
-                key += num_letter;
-                status = delete(parent, next, key);
+                en->num_letter += num_letter;
+                en->digit = digit;
+                status = ptrie_restruct(parent, pSDigit, next,
+                                        en,     restKey);
                 if (status == MATCHED) {
-                    status = restruct(pnode, node, rest);
-                    return status;
-                }
-                else {
-                    return status;
+                    restPart = restKey + en->num_letter;
+                    status = restoreShare(restPart, node,
+                                        rest,     point);
+                    if (status == ERROR) {
+                        perror("restoreShare()@ptrie_restruct()\n");
+                        return FAILURE;
+                    }
+                    else {
+                        status = ptrie_merge(pnode, pSDigit, node,
+                                             rest,  restPart);
+                        if (status == ERROR) {
+                            return status;
+                        }
+                        else {
+                            return status;
+                        }
+                    }
                 }
 
             }
-            else if (digit >= node->Digit && (len - num_letter) > 0) {
-                /* createINTERNAL */
+            else if ( digit != node->SDigit && (lenTarget - 1) == num_letter &&
+                      (lenKey - num_letter) > 0 ) {
+                return UNMATCHED;
+            }
+            else if ( (lenTarget - 1) > num_letter &&
+                      (lenKey - num_letter) > 0 ) {
                 return UNMATCHED;
             }
             else {
-                return ERROR;
+                return FAILURE;
             }
     }
 
-    return ERROR;
+    return FAILURE;
+}
+
+int ptrie_delete(NODE **pnode, NODE *node, ENTRY *en)
+{
+    int status;
+    KEY *restKey;
+    size_t len;
+
+    status = FAILURE;
+    switch(node->type) {
+        case LEAF:
+            free(node->Key);
+            free(node);
+
+            *pnode = NULL;
+
+            status = DELETED;
+            break;
+        case INTERNAL:
+            len = strnlen(en->key, MAX_KEY_LEN);
+            restKey = malloc(sizeof(KEY) * (len + 1));
+            if (restKey == NULL) {
+                perror("malloc()@ptrie_delete()\n");
+                return FAILURE;
+            }
+            else {
+                status = ptrie_restruct(pnode, (*pnode)->SDigit, node,
+                                        en,     restKey);
+                free(restKey);
+                break;
+            }
+    }
+
+    return status;
 }
 
  
-int insert(ENTRY *en) {
+int ptrie_insert(ENTRY *en) {
 
     int status;
 
@@ -611,7 +953,7 @@ int insert(ENTRY *en) {
         }
     }
     else {
-        status = createFork(&root, root, en->key, en->val);
+        status = createFork(&root, root, en);
         if (status == ERROR) {
             return FAILURE;
         }
@@ -621,4 +963,3 @@ int insert(ENTRY *en) {
     }
 
 }
-
