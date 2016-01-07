@@ -108,11 +108,11 @@ NODE* createLEAF(KEY *key, size_t start_point, DIGIT digit, DATA val);
 NODE* createINTERNAL(KEY *left, unsigned int start_point, DIGIT digit);
 int createFork(NODE **pnode, NODE *node, ENTRY *en);
 ENTRY* createENTRY(KEY *key, DIGIT digit, DATA val, int status);
-ENTRY* search(NODE *node, ENTRY *en);
+ENTRY* ptrie_search(NODE *node, ENTRY *en);
 int ptrie_restruct(NODE **pnode, DIGIT pSDigit,  NODE *node,
                    ENTRY *en,    KEY *restKey);
 int ptrie_merge(NODE **pnode, DIGIT pSDigit, NODE *node,
                 NODE *rest,   KEY *restPart);
 int ptrie_delete(NODE **pnode, NODE *node, ENTRY *en);
-int insert(ENTRY *en);
+int ptrie_insert(ENTRY *en);
 
