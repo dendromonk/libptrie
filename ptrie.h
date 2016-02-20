@@ -1,20 +1,20 @@
-/* 
+/*
  * Copyright (C) 2016 Kazuki Tachibana (iwanderer.1214@air.ocn.ne.jp)
  *
  *  This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the license, or (at your option) any later version.
-
+ *
  *  This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU 
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
-
+ *
  *  You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
- * USA 
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
+ * USA
  */
 
 #include <stdio.h>
@@ -28,7 +28,7 @@
 #define DATA    unsigned int
 #define DIGIT   unsigned char
 
-#define LEAF            0 
+#define LEAF            0
 #define INTERNAL        1
 
 #define LEFT            0
@@ -37,9 +37,9 @@
 #define ASCII           8
 
 #define BIT_UNIT        ASCII
-#define MSD             ASCII       /* Most Significant Digit */
-#define LSD             1           /* Least Significant Digit */
-#define WHOLE           0           /* It means '9' in nonary. */
+#define MSD             ASCII   /* Most Significant Digit */
+#define LSD             1       /* Least Significant Digit */
+#define WHOLE           0       /* It means '9' in nonary. */
 
 #define MAX_KEY_LEN     5000
 
@@ -57,27 +57,27 @@
 #define DELETED         5
 
 typedef struct node {
-    bool type;
+    bool            type;
     union {
 
         struct in_node {
-            /* It means digit of critical(unmatched) bit.
-             * Scope of "digit" is between 0(WHOLE) and 8(MSD) in ASCII.
-             * And value of "WHOLE" represents that all bits effective.
-             * (EX.)If (critical)digit == 0x01 then
-             * bits of(8 digit ~ 2digit) is agreement.
-             */
-            DIGIT digit;    
-            KEY *share;
-            struct node *left;
-            struct node *right;
+            /*
+               It means digit of critical(unmatched) bit. Scope of "digit" is
+               between 0(WHOLE) and 8(MSD) in ASCII. And value of "WHOLE"
+               represents that all bits effective. (EX.)If (critical)digit ==
+               0x01 then bits of(8 digit ~ 2digit) is agreement.
+            */
+            DIGIT           digit;
+            KEY            *share;
+            struct node    *left;
+            struct node    *right;
         } internal;
 
         struct leaf_node {
-            KEY *key;
+            KEY            *key;
             /* It means first digit of effective bit. */
-            DIGIT digit;
-            DATA val;
+            DIGIT           digit;
+            DATA            val;
         } leaf;
 
     } unit;
@@ -85,12 +85,12 @@ typedef struct node {
 
 
 typedef struct {
-    KEY *key;
-    unsigned int num_letter;
-    DATA val;
-    DIGIT digit;            /* it means top_digit. Top digit of key and
-                                       top digit of Share engaes. */
-    int status;
+    KEY            *key;
+    unsigned int    num_letter;
+    DATA            val;
+    DIGIT           digit;      /* it means top_digit. Top digit of key and
+                                   top digit of Share engaes. */
+    int             status;
 } ENTRY;
 
 
@@ -113,25 +113,25 @@ typedef struct {
 
 #define MASK(digit)  (255 - ((1 << digit) - 1))
 
-#define PINBIT(digit) (255 - (1 << (digit - 1)))   
- 
-int reSizeKEY(NODE *node, size_t start_point, unsigned char node_type);
-unsigned int compare_letter(KEY *key1, KEY *key2, size_t len);
-unsigned char compare_bit(KEY *key1, DIGIT bottom, KEY *key2, DIGIT top);
-unsigned int compareSHARE(KEY *share, DIGIT shareDigit, ENTRY *en);
-int compareLEAF(KEY *leafkey, DIGIT leafDigit, ENTRY *en);
-int Initiate(ENTRY *en);
-bool pullout_bit(KEY *key1, int digit);
-KEY* createSHARE(KEY *key, int num_letter);
-NODE* createLEAF(KEY *key, size_t start_point, DIGIT digit, DATA val);
-NODE* createINTERNAL(KEY *left, unsigned int start_point, DIGIT digit);
-int createFork(NODE **pnode, NODE *node, ENTRY *en);
-ENTRY* createENTRY(KEY *key, DIGIT digit, DATA val, int status);
-ENTRY* ptrie_search(NODE *node, ENTRY *en);
-int ptrie_restruct(NODE **pnode, DIGIT pSDigit,  NODE *node,
-                   ENTRY *en,    KEY *restKey);
-int ptrie_merge(NODE **pnode, DIGIT pSDigit, NODE *node,
-                NODE *rest,   KEY *restPart);
-int ptrie_delete(NODE **pnode, NODE *node, ENTRY *en);
-int ptrie_insert(ENTRY *en);
+#define PINBIT(digit) (255 - (1 << (digit - 1)))
 
+int             reSizeKEY(NODE * node, size_t start_point, unsigned char node_type);
+unsigned int    compare_letter(KEY * key1, KEY * key2, size_t len);
+unsigned char   compare_bit(KEY * key1, DIGIT bottom, KEY * key2, DIGIT top);
+unsigned int    compareSHARE(KEY * share, DIGIT shareDigit, ENTRY * en);
+int             compareLEAF(KEY * leafkey, DIGIT leafDigit, ENTRY * en);
+int             Initiate(ENTRY * en);
+bool            pullout_bit(KEY * key1, int digit);
+KEY            *createSHARE(KEY * key, int num_letter);
+NODE           *createLEAF(KEY * key, size_t start_point, DIGIT digit, DATA val);
+NODE           *createINTERNAL(KEY * left, unsigned int start_point, DIGIT digit);
+int             createFork(NODE ** pnode, NODE * node, ENTRY * en);
+ENTRY          *createENTRY(KEY * key, DIGIT digit, DATA val, int status);
+ENTRY          *ptrie_search(NODE * node, ENTRY * en);
+int 
+ptrie_restruct(NODE ** pnode, DIGIT pSDigit, NODE * node,
+               ENTRY * en, KEY * restKey);
+int             ptrie_merge(NODE ** pnode, DIGIT pSDigit, NODE * node,
+                            NODE * rest, KEY * restPart);
+int             ptrie_delete(NODE ** pnode, NODE * node, ENTRY * en);
+int             ptrie_insert(ENTRY * en);
