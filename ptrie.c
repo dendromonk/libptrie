@@ -1,3 +1,22 @@
+/* 
+ * Copyright (C) 2016 Kazuki Tachibana (iwanderer.1214@air.ocn.ne.jp)
+ *
+ *  This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the license, or (at your option) any later version.
+
+ *  This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU 
+ * Lesser General Public License for more details.
+
+ *  You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
+ * USA 
+ */
+
 #include "ptrie.h"
 
 NODE *root = NULL;
@@ -6,7 +25,7 @@ NODE* createLEAF(KEY *key, size_t start_point, DIGIT digit, DATA val) {
 
     NODE *leaf;
     size_t len;
-    const KEY *src = key + start_point;
+    const char *src = (const char *)(key + start_point);
 
     leaf = malloc(sizeof(NODE));
     if (leaf == NULL) {
@@ -45,7 +64,7 @@ int reSizeKEY(NODE *node, size_t start_point, unsigned char node_type) {
 
     target = REF_KEY(node);
 
-    oldLen = strnlen(*target, MAX_KEY_LEN);
+    oldLen = strnlen((const char *)*target, MAX_KEY_LEN);
     oldKey = malloc(sizeof(KEY) * (oldLen + 1));
     if (oldKey == NULL) {
         perror("malloc@reSizeKEY()");
@@ -56,7 +75,7 @@ int reSizeKEY(NODE *node, size_t start_point, unsigned char node_type) {
         *(oldKey + oldLen) = '\0';
         //strlcpy(oldKey, *target, oldLen + 1);
 
-        newLen = strnlen(*target + start_point, MAX_KEY_LEN);
+        newLen = strnlen((const char *)(*target + start_point), MAX_KEY_LEN);
         tmp = realloc(*target, sizeof(KEY) * (newLen + 1));
         if (tmp == NULL) {
             perror("realloc@reSizeKEY()");
@@ -92,9 +111,12 @@ unsigned int compare_letter(KEY *key1, KEY *key2, size_t len)
 unsigned char compare_bit(KEY *key1, DIGIT bottom, KEY *key2, DIGIT top)
 {
     KEY bitKey1, bitKey2, mask;
-    int i, point;
+    int i, point, thresh;
 
-    for (i = TOP(top); i >= BOTTOM(bottom); i--) {
+    point = TOP(top);
+    thresh = BOTTOM(bottom);
+
+    for (i = point; i >= thresh; i--) {
         mask = 1 << i;
         bitKey1 = (*key1) & mask;
         bitKey2 = (*key2) & mask;
@@ -120,8 +142,8 @@ unsigned int compareSHARE(KEY *share, DIGIT shareDigit, ENTRY *en)
     unsigned int num_letter, fullBit;
     size_t len, lenShare, lenKey;
 
-    lenShare = strnlen(share, MAX_KEY_LEN);
-    lenKey = strnlen(key, MAX_KEY_LEN);
+    lenShare = strnlen((const char *)share, MAX_KEY_LEN);
+    lenKey = strnlen((const char *)key, MAX_KEY_LEN);
     if (lenShare < lenKey) {
         len = lenShare;
     }
@@ -217,8 +239,8 @@ int compareLEAF(KEY *leafKey, DIGIT top, ENTRY *en)
     else {
         num_letter = 0;
 
-        lenLeaf = strnlen(leafKey, MAX_KEY_LEN);
-        lenKey = strnlen(key, MAX_KEY_LEN);
+        lenLeaf = strnlen((const char *)leafKey, MAX_KEY_LEN);
+        lenKey = strnlen((const char *)key, MAX_KEY_LEN);
         if (lenLeaf < lenKey) {
             len = lenLeaf;
         }
@@ -267,7 +289,7 @@ int Initiate(ENTRY *en) {
     NODE *first;
     size_t len;
 
-    len = strnlen(en->key, MAX_KEY_LEN);
+    len = strnlen((const char *)(en->key), MAX_KEY_LEN);
     first = createLEAF(en->key, 0, WHOLE,  en->val);
     if (first == NULL) {
         return ERROR;
@@ -347,9 +369,9 @@ int createFork(NODE **pnode, NODE *node, ENTRY *en) {
     size_t lenKey, lenTarget, lenShare, num_letter;
     
     target = REF_KEY(node);
-    lenTarget = strnlen(*target, MAX_KEY_LEN);
+    lenTarget = strnlen((const char *)(*target), MAX_KEY_LEN);
 
-    lenKey = strnlen(key, MAX_KEY_LEN);
+    lenKey = strnlen((const char *)key, MAX_KEY_LEN);
 
     switch(node->type) {
         case LEAF: 
@@ -359,26 +381,28 @@ int createFork(NODE **pnode, NODE *node, ENTRY *en) {
             }
             else {
                 num_letter = fullBit / (BIT_UNIT + 1);
-                digit = (unsigned char)(fullBit % (BIT_UNIT + 1));
-                if ( digit == 0 ) { //&& (lenKey - num_letter) == 0 ) {
+                digit = (DIGIT)(fullBit % (BIT_UNIT + 1));
+                if (digit == 0) { // && (lenKey - num_letter) == 0 ) {
+                    printf("lenKey - num_letter:%lu\n", lenKey - num_letter);
                     status = MATCHED;
                     break;
                 }
-                else if ( digit > 0 ) { //|| (lenKey - num_letter) > 0 ) {
+                else { //if (digit > 0 || (lenKey - num_letter) > 0 ) {
                     status = UNMATCHED;
                     break;
                 }
-                
+                /*
                 else {
                     status = ERROR;
                     printf("ERROR@ptrie_insert():%s\n", *target);
                     break;
                 }
+                */
             }
         case  INTERNAL:
             fullBit = compareSHARE(*target, node->SDigit, en);
             num_letter = fullBit / (BIT_UNIT + 1);
-            digit = (unsigned char)(fullBit % (BIT_UNIT +  1));
+            digit = (unsigned char)(fullBit % (BIT_UNIT + 1));
             if ( digit == node->SDigit && (lenTarget - 1) == num_letter && 
                  (lenKey - num_letter) > 0 ) {
                 if (digit > 0) {
@@ -511,7 +535,7 @@ ENTRY* createENTRY(KEY *key, DIGIT digit, DATA val, int status) {
     ENTRY *en;
     size_t len;
     
-    len = strnlen(key, MAX_KEY_LEN);
+    len = strnlen((const char *)key, MAX_KEY_LEN);
     en = malloc(sizeof(ENTRY));
     if (en == NULL) {
         perror("malloc@createENTRY()");
@@ -544,7 +568,7 @@ ENTRY* ptrie_search(NODE *node, ENTRY *en) {
     
     KEY *target, *key;
     int fullBit;
-    unsigned char digit;
+    DIGIT digit;
     size_t lenKey, lenTarget, num_letter;
     NODE *next;
     ENTRY *result;
@@ -557,9 +581,9 @@ ENTRY* ptrie_search(NODE *node, ENTRY *en) {
     else {
     key = en->key + en->num_letter;
     target = KEYCHAR(node);
-    lenTarget = strnlen(target, MAX_KEY_LEN);
+    lenTarget = strnlen((const char *)target, MAX_KEY_LEN);
 
-    lenKey = strnlen(key, MAX_KEY_LEN);
+    lenKey = strnlen((const char *)key, MAX_KEY_LEN);
 
     num_letter = 0;
     switch(node->type) {
@@ -570,25 +594,29 @@ ENTRY* ptrie_search(NODE *node, ENTRY *en) {
             }
             else {
                 num_letter = fullBit / (BIT_UNIT + 1);
-                digit = (unsigned char)(fullBit % (BIT_UNIT + 1));
-                if ( digit == 0) {// && (lenKey - num_letter) == 0 ) {
+                digit = (DIGIT)(fullBit % (BIT_UNIT + 1));
+                if (digit == 0) { // && (lenKey - num_letter) == 0 ) {
+                    printf("lenKey - num_letter:%lu\n", lenKey - num_letter);
                     status = MATCHED;
                     break;
                 }
-                else if ( digit > 0) { // || (lenKey - num_letter) > 0 ) {
+                else { // if (digit > 0 || (lenKey - num_letter) > 0 ) {
+                    printf("lenKey - num_letter:%lu\n", lenKey - num_letter);
                     status = UNMATCHED;
                     break;
                 }
+                /*
                 else {
                     status = ERROR;
                     printf("ERROR@ptrie_search():%s\n", target);
                     break;
                 }
+                */
             }
         case INTERNAL:
             fullBit = compareSHARE(target, node->SDigit, en);
             num_letter = fullBit / (BIT_UNIT + 1);
-            digit = (unsigned char)(fullBit % (BIT_UNIT + 1));
+            digit = (DIGIT)(fullBit % (BIT_UNIT + 1));
             if ( digit == node->SDigit && (lenTarget - 1) == num_letter &&
                  (lenKey - num_letter) > 0 ) {
                 if (digit > 0) {
@@ -676,7 +704,7 @@ int restoreShare(KEY  *restKey,   NODE *node,
 {
     size_t end_point, lenShare;
 
-    lenShare = strnlen(node->Share, MAX_KEY_LEN);
+    lenShare = strnlen((const char *)(node->Share), MAX_KEY_LEN);
 
     end_point = lenShare - 1;
 
@@ -710,7 +738,7 @@ int ptrie_merge(NODE **pnode, DIGIT pSDigit,
     size_t lenTarget, lenNew, overlap;
 
     target = KEYCHAR(rest);
-    lenTarget = strnlen(target, MAX_KEY_LEN); 
+    lenTarget = strnlen((const char *)target, MAX_KEY_LEN); 
     if (node->SDigit == LSD) {
         overlap = 0;
     }
@@ -776,7 +804,7 @@ int ptrie_restruct(NODE **pnode, DIGIT pSDigit, NODE *node,
 {
     KEY *target, *key, *restPart;
     unsigned int fullBit, num_letter;
-    unsigned char digit;
+    DIGIT digit;
     size_t lenKey, lenTarget;
     NODE *next, *rest;
     NODE **parent;
@@ -784,10 +812,10 @@ int ptrie_restruct(NODE **pnode, DIGIT pSDigit, NODE *node,
     int status;
 
     key = en->key + en->num_letter;
-    lenKey = strnlen(key, MAX_KEY_LEN);
+    lenKey = strnlen((const char *)key, MAX_KEY_LEN);
     
     target = KEYCHAR(node);
-    lenTarget = strnlen(target, MAX_KEY_LEN); 
+    lenTarget = strnlen((const char *)target, MAX_KEY_LEN); 
     num_letter = 0;
 
     switch(node->type) {
@@ -849,7 +877,6 @@ int ptrie_restruct(NODE **pnode, DIGIT pSDigit, NODE *node,
                 printf("restKey:%s restKey + en->num_letter:%s lenShare:%lu@ptrie_restruct()\n", restKey, restKey + en->num_letter, lenTarget);
 #endif
 
-
                 switch(point) {
                     case LEFT:
                         next = node->Left;
@@ -861,6 +888,8 @@ int ptrie_restruct(NODE **pnode, DIGIT pSDigit, NODE *node,
                         parent = &(node->Right);
                         rest = node->Left;
                         break;
+                    default:
+                        return FAILURE;
                 }
             
                 en->num_letter += num_letter;
@@ -921,7 +950,7 @@ int ptrie_delete(NODE **pnode, NODE *node, ENTRY *en)
             status = DELETED;
             break;
         case INTERNAL:
-            len = strnlen(en->key, MAX_KEY_LEN);
+            len = strnlen((const char *)en->key, MAX_KEY_LEN);
             restKey = malloc(sizeof(KEY) * (len + 1));
             if (restKey == NULL) {
                 perror("malloc()@ptrie_delete()\n");

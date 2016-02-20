@@ -1,3 +1,22 @@
+/* 
+ * Copyright (C) 2016 Kazuki Tachibana (iwanderer.1214@air.ocn.ne.jp)
+ *
+ *  This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the license, or (at your option) any later version.
+
+ *  This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU 
+ * Lesser General Public License for more details.
+
+ *  You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
+ * USA 
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -48,7 +67,7 @@ typedef struct node {
              * (EX.)If (critical)digit == 0x01 then
              * bits of(8 digit ~ 2digit) is agreement.
              */
-            unsigned char digit;    
+            DIGIT digit;    
             KEY *share;
             struct node *left;
             struct node *right;
@@ -69,7 +88,7 @@ typedef struct {
     KEY *key;
     unsigned int num_letter;
     DATA val;
-    unsigned char digit;            /* it means top_digit. Top digit of key and
+    DIGIT digit;            /* it means top_digit. Top digit of key and
                                        top digit of Share engaes. */
     int status;
 } ENTRY;
